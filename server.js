@@ -1,34 +1,24 @@
 const express = require("express");
-const postgres = require("postgres");
+const crypto = require("crypto");
+require("dotenv").config();
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+const { neon } = require("@neondatabase/serverless");
 const port = 5000;
+const sql = neon(process.env.DATABASE_URL);
 
-const PGHOST = "ep-blue-resonance-47487853.eu-central-1.aws.neon.tech";
-const PGDATABASE = "web1-test-db";
-const PGUSER = "erfan.samieyan95";
-const PGPASSWORD = "ZQUqPz3I7gFG";
-const ENDPOINT_ID = "ep-blue-resonance-47487853";
-
-const sql = postgres({
-  host: PGHOST,
-  database: PGDATABASE,
-  username: PGUSER,
-  password: PGPASSWORD,
-  port: 5432,
-  ssl: "require",
-  connection: {
-    options: `project=${ENDPOINT_ID}`,
-  },
-});
+const hashPassword = (password) => {
+  return crypto.createHash("sha256").update(password).digest("hex");
+};
 
 app.post("/users/register", async (req, res) => {
-  const { name, email, password } = req.body;
+  const { name, email, password, is_admin = false } = req.body;
+  const hashedPassword = hashPassword(password);
   try {
-    await sql`INSERT INTO users (name, email, password) VALUES (${name}, ${email}, ${password})`;
+    await sql`INSERT INTO users (name, email, password, is_admin) VALUES (${name}, ${email}, ${hashedPassword}, ${is_admin})`;
     res.status(201).json({ message: "User registered successfully" });
   } catch (error) {
     console.error("Error registering user:", error);
@@ -38,9 +28,10 @@ app.post("/users/register", async (req, res) => {
 
 app.post("/users/login", async (req, res) => {
   const { email, password } = req.body;
+  const hashedPassword = hashPassword(password);
   try {
     const user =
-      await sql`SELECT * FROM users WHERE email = ${email} AND password = ${password}`;
+      await sql`SELECT * FROM users WHERE email = ${email} AND password = ${hashedPassword}`;
     if (user.length === 0) {
       return res.status(400).json({ message: "Invalid credentials" });
     }
@@ -53,7 +44,7 @@ app.post("/users/login", async (req, res) => {
 
 app.get("/users", async (_, res) => {
   try {
-    const users = await sql`SELECT id, name, email FROM users`;
+    const users = await sql`SELECT id, name, email, is_admin FROM users`;
     res.json(users);
   } catch (error) {
     console.error("Error fetching users:", error);
