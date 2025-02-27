@@ -69,21 +69,24 @@ app.post("/users/register", async (req, res) => {
 });
 
 app.post("/users/login", async (req, res) => {
+  console.log("Request body:", req.body);
   const { email, password } = req.body;
-  const hashedPassword = hashPassword(password);
+
+  if (!email || !password) {
+    return res.status(400).json({ message: "Email and password are required" });
+  }
+
   try {
+    const hashedPassword = hashPassword(password);
     const user =
       await sql`SELECT * FROM users WHERE email = ${email} AND password = ${hashedPassword}`;
+
     if (user.length === 0) {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
     const token = generateToken(user[0]);
-
-    res.json({
-      message: "Login successful",
-      token,
-    });
+    res.json({ message: "Login successful", token });
   } catch (error) {
     console.error("Error logging in:", error);
     res.status(500).json({ message: "Error logging in" });
