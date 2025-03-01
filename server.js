@@ -10,7 +10,7 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: "http://localhost:5174",
     methods: "GET, POST, PUT, DELETE",
     credentials: true,
   })
@@ -78,11 +78,16 @@ app.post("/users/login", async (req, res) => {
 
   try {
     const hashedPassword = hashPassword(password);
-    const user =
-      await sql`SELECT * FROM users WHERE email = ${email} AND password = ${hashedPassword}`;
+    const user = await sql`SELECT * FROM users WHERE email = ${email}`;
 
-    if (user.length === 0) {
+    if (user.length === 0 || user[0].password !== hashedPassword) {
       return res.status(400).json({ message: "Invalid credentials" });
+    }
+
+    if (user[0].is_blocked) {
+      return res
+        .status(403)
+        .json({ message: "Your account has been blocked." });
     }
 
     const token = generateToken(user[0]);
@@ -497,6 +502,37 @@ app.put("/users/block", async (req, res) => {
   } catch (error) {
     console.error("Error updating user status:", error);
     res.status(500).json({ message: "Error updating user status" });
+  }
+});
+
+app.post("/working-hours", async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    const adminCheck =
+      await sql`SELECT is_admin FROM users WHERE id = ${decoded.id}`;
+    if (adminCheck.length === 0 || !adminCheck[0].is_admin) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    const { day, open_time, close_time, max_appointments_per_slot } = req.body;
+
+    await sql`
+      INSERT INTO working_hours (day, open_time, close_time, max_appointments_per_slot)
+      VALUES (${day}, ${open_time}, ${close_time}, ${max_appointments_per_slot})
+      ON CONFLICT (day) 
+      DO UPDATE SET open_time = ${open_time}, close_time = ${close_time}, max_appointments_per_slot = ${max_appointments_per_slot}
+    `;
+
+    res.json({ message: "Working hours updated successfully" });
+  } catch (error) {
+    console.error("Error updating working hours:", error);
+    res.status(500).json({ message: "Error updating working hours" });
   }
 });
 
