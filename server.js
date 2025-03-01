@@ -359,8 +359,6 @@ app.get("/users/me", async (req, res) => {
   }
 });
 
-const crypto = require("crypto");
-
 app.put("/users/update", async (req, res) => {
   const token = req.headers.authorization?.split(" ")[1];
   if (!token) {
@@ -381,10 +379,7 @@ app.put("/users/update", async (req, res) => {
     `;
 
     if (password) {
-      const hashedPassword = crypto
-        .createHash("sha256")
-        .update(password)
-        .digest("hex");
+      const hashedPassword = hashPassword(password);
       updateQuery = sql`
         UPDATE users SET name = ${name}, email = ${email}, password = ${hashedPassword}
         WHERE id = ${decoded.id}
@@ -396,6 +391,81 @@ app.put("/users/update", async (req, res) => {
   } catch (error) {
     console.error("Error updating user:", error);
     res.status(500).json({ message: "Error updating profile" });
+  }
+});
+
+app.post("/favorites", async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const { service_id } = req.body;
+
+    if (!service_id) {
+      return res.status(400).json({ message: "Service ID is required" });
+    }
+
+    await sql`
+      INSERT INTO favorites (user_id, service_id)
+      VALUES (${decoded.id}, ${service_id})
+      ON CONFLICT DO NOTHING
+    `;
+
+    res.json({ message: "Service added to favorites" });
+  } catch (error) {
+    console.error("Error adding to favorites:", error);
+    res.status(500).json({ message: "Error adding to favorites" });
+  }
+});
+
+app.get("/favorites", async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const favorites = await sql`
+      SELECT services.id, services.name, services.description, services.price 
+      FROM services 
+      JOIN favorites ON services.id = favorites.service_id
+      WHERE favorites.user_id = ${decoded.id}
+    `;
+
+    res.json(favorites);
+  } catch (error) {
+    console.error("Error fetching favorites:", error);
+    res.status(500).json({ message: "Error fetching favorites" });
+  }
+});
+
+app.delete("/favorites", async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const { service_id } = req.body;
+
+    if (!service_id) {
+      return res.status(400).json({ message: "Service ID is required" });
+    }
+
+    await sql`
+      DELETE FROM favorites 
+      WHERE user_id = ${decoded.id} AND service_id = ${service_id}
+    `;
+
+    res.json({ message: "Service removed from favorites" });
+  } catch (error) {
+    console.error("Error removing from favorites:", error);
+    res.status(500).json({ message: "Error removing from favorites" });
   }
 });
 
