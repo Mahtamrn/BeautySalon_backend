@@ -337,6 +337,68 @@ app.delete("/reviews/:id", authMiddleware, async (req, res) => {
   }
 });
 
+app.get("/users/me", async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user =
+      await sql`SELECT id, name, email FROM users WHERE id = ${decoded.id}`;
+
+    if (user.length === 0) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json(user[0]);
+  } catch (error) {
+    console.error("Error fetching user:", error);
+    res.status(401).json({ message: "Invalid token" });
+  }
+});
+
+const crypto = require("crypto");
+
+app.put("/users/update", async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const { name, email, password } = req.body;
+
+    if (!name || !email) {
+      return res.status(400).json({ message: "Name and email are required" });
+    }
+
+    let updateQuery = sql`
+      UPDATE users SET name = ${name}, email = ${email}
+      WHERE id = ${decoded.id}
+    `;
+
+    if (password) {
+      const hashedPassword = crypto
+        .createHash("sha256")
+        .update(password)
+        .digest("hex");
+      updateQuery = sql`
+        UPDATE users SET name = ${name}, email = ${email}, password = ${hashedPassword}
+        WHERE id = ${decoded.id}
+      `;
+    }
+
+    await updateQuery;
+    res.json({ message: "Profile updated successfully" });
+  } catch (error) {
+    console.error("Error updating user:", error);
+    res.status(500).json({ message: "Error updating profile" });
+  }
+});
+
 app.listen(port, () =>
-  console.log(`Beauty Salon API is running on port ${port}`)
+  console.log(`BeautySalon API is running on port ${port}`)
 );
