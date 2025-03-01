@@ -469,6 +469,37 @@ app.delete("/favorites", async (req, res) => {
   }
 });
 
+app.put("/users/block", async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const { user_id, is_blocked } = req.body;
+
+    const adminCheck =
+      await sql`SELECT is_admin FROM users WHERE id = ${decoded.id}`;
+    if (adminCheck.length === 0 || !adminCheck[0].is_admin) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    await sql`
+      UPDATE users 
+      SET is_blocked = ${is_blocked}
+      WHERE id = ${user_id}
+    `;
+
+    res.json({
+      message: `User ${is_blocked ? "blocked" : "unblocked"} successfully`,
+    });
+  } catch (error) {
+    console.error("Error updating user status:", error);
+    res.status(500).json({ message: "Error updating user status" });
+  }
+});
+
 app.listen(port, () =>
   console.log(`BeautySalon API is running on port ${port}`)
 );
