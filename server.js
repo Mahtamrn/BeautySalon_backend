@@ -536,6 +536,16 @@ app.post("/working-hours", async (req, res) => {
   }
 });
 
+app.get("/working-hours", async (req, res) => {
+  try {
+    const workingHours = await sql`SELECT * FROM working_hours`;
+    res.json(workingHours);
+  } catch (error) {
+    console.error("Error fetching working hours:", error);
+    res.status(500).json({ message: "Error fetching working hours" });
+  }
+});
+
 app.listen(port, () =>
   console.log(`BeautySalon API is running on port ${port}`)
 );
